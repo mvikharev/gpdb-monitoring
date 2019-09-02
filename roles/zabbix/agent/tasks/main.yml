@@ -1,0 +1,56 @@
+- name: install zabbix repo package (CentOS)
+  yum: name={{ zabbix_repo_package_rpm }} state=present disable_gpg_check=yes
+  when: ansible_distribution == 'CentOS'
+
+- name: install zabbix-agent (CentOS)
+  yum: name=zabbix-agent state=present update_cache=yes
+  when: ansible_distribution == 'CentOS'
+
+- name: install zabbix repo package (Ubuntu)
+  apt: deb={{ zabbix_repo_package_deb }} state=present
+  when: ansible_distribution == 'Ubuntu'
+
+- name: install zabbix-agent (Ubuntu)
+  apt: name=zabbix-agent state=present update_cache=yes
+  when: ansible_distribution == 'Ubuntu'
+
+- name: create zabbix directories
+  file: state=directory dest={{ item }} owner=zabbix group=zabbix
+  with_items:
+  - /etc/zabbix/zabbix_agentd.d
+  - /etc/zabbix/scripts
+  - /var/run/zabbix/
+  - /var/log/zabbix/
+  notify:
+  - restart_z_agent
+
+- name: add custom metrics scripts
+  copy: src={{ item }} dest=/etc/zabbix/scripts/{{ item }} mode=0755
+  with_items:
+  - zabbix_mdraid.sh
+
+- name: add sudo rights for scripts if required
+  copy: src={{ item }} dest=/etc/sudoers.d/{{ item }}
+  with_items:
+  - zabbix-mdraid
+
+- name: add metrics config files
+  copy: src={{ item }} dest=/etc/zabbix/zabbix_agentd.d/{{ item }}
+  tags: zabbix-conf
+  with_items:
+  - disk-io.conf
+  - mdraid.conf
+  - vfs.dev.conf
+  - greenplum.conf
+  notify:
+  - restart_z_agent
+
+- name: generate agent config
+  template: src=zabbix_agentd.conf.j2 dest=/etc/zabbix/zabbix_agentd.conf
+  notify:
+  - restart_z_agent
+
+- name: gpdb monitoring
+  include_tasks: gpdb-monitoring.yml
+  tags: zabbix-conf
+  when: "'gpdb-master' in group_names"

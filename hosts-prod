@@ -1,0 +1,18 @@
+######################## hosts ########################
+# greenplum cluster
+gp-master    ansible_host=10.0.0.1
+gp-node01    ansible_host=10.0.0.2
+
+######################## groups ########################
+[gpdb-master]
+gp-master
+
+[gpdb-standby-master]
+
+[gpdb-segments]
+gp-node01
+
+[gpdb-hosts:children]
+gpdb-master
+gpdb-standby-master
+gpdb-segments

@@ -1,0 +1,48 @@
+#!/bin/bash -l
+
+# ^ -l to set gpadmin variables from bashrc
+
+DIR=/opt/gpdb/monitor/
+DATABASES="{% for db in databases %}
+{{ db.name }}
+{% endfor %}"
+
+mkdir -p $DIR
+
+for DB in $DATABASES; do
+    for PARAM in active long blocked_select blocked_other blocked_select_long schema_count vmem_segment_max vmem_total; do
+        case "$PARAM" in
+        'active' )
+          query="select count(*) from pg_stat_activity where current_query <> '<IDLE>' and datname = '$DB' and usename <> 'gpadmin';"
+        ;;
+        'long' )
+          query="select COALESCE(ROUND(EXTRACT(EPOCH FROM max(now() - query_start))), 0) from pg_stat_activity where current_query <> '<IDLE>' and datname = '$DB' and usename <> 'gpadmin';"
+        ;;
+        'blocked_select' )
+          query="select count(*) from pg_stat_activity where current_query <> '<IDLE>' and datname = '$DB' and waiting = true and current_query like '%SELECT%' and current_query not like '%DELETE FROM%' and current_query not like '%CREATE TABLE%' and usename <> 'gpadmin';"
+        ;;
+        'blocked_select_long' )
+          query="select COALESCE(ROUND(EXTRACT(EPOCH FROM max(now() - query_start))), 0) from pg_stat_activity where current_query <> '<IDLE>' and datname = '$DB' and waiting = true and current_query like '%SELECT%' and current_query not like '%DELETE FROM%' and current_query not like '%CREATE TABLE%' and usename <> 'gpadmin';"
+        ;;
+        'blocked_other' )
+          query="select count(*) from pg_stat_activity where current_query <> '<IDLE>' and datname = '$DB' and waiting = true and not (current_query like '%SELECT%' and current_query not like '%DELETE FROM%' and usename <> 'gpadmin');"
+        ;;
+        'schema_count' )
+          query="select count(*) from pg_catalog.pg_namespace where nspname not like 'pg_%';"
+        ;;
+        'vmem_segment_max' )
+          query="select max(vmem) from (select segid, sum(vmem_mb) vmem from session_state.session_level_memory_consumption where datname = '$DB' and usename <> 'gpadmin' group by segid) a;"
+        ;;
+        'vmem_total' )
+          query="select sum(vmem_mb) from session_state.session_level_memory_consumption where datname = '$DB' and usename <> 'gpadmin';"
+        ;;
+
+        esac
+
+        FILE=$DIR/${DB}_${PARAM}
+        touch $FILE
+
+        chmod go+r $FILE
+        echo $(psql -qAtX -c "$(echo $query)" $DB) > $FILE
+    done
+done

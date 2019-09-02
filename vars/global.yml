@@ -1,0 +1,6 @@
+zabbix_server_addr: 10.0.0.254
+
+# list of users/databases to create
+databases:
+- name: db1
+- name: db2

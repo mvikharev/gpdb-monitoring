@@ -1,0 +1,40 @@
+- name: create directory for custom metrics scripts
+  file: state=directory dest=/etc/zabbix/scripts
+
+- name: add custom metrics scripts (files)
+  copy: src={{ item }} dest=/etc/zabbix/scripts/{{ item }} mode=0755
+  tags: zabbix-conf
+  with_items:
+  - greenplum.py
+  - greenplum.warning.sh
+  - greenplum.warning.zabbix.sh
+  - greenplum.state.sh
+
+- name: add custom metrics scripts (templates)
+  template: src={{ item }}.j2 dest=/etc/zabbix/scripts/{{ item }} mode=0755
+  tags: zabbix-conf
+  with_items:
+  - greenplum.exporter.sh
+
+- name: add metrics config files
+  copy: src={{ item }} dest=/etc/zabbix/zabbix_agentd.d/{{ item }}
+  with_items:
+  - greenplum.conf
+  notify:
+  - restart_z_agent
+
+- name: create directory for greenplum logs
+  file: state=directory owner=gpadmin group=gpadmin dest=/var/log/greenplum
+
+- name: add greenplum monitoring scripts cron tasks
+  tags: zabbix-conf
+  cron: name="{{ item.n }}" minute="{{ item.s }}" user="{{ item.u }}" job="{{ item.j }}"
+  with_items:
+  - { "n": "check greenplum warnings",
+      "s": "*/3",
+      "u": "gpadmin",
+      "j": "/etc/zabbix/scripts/greenplum.warning.sh > /var/log/greenplum/warning.log" }
+  - { "n": "export current metrics warnings",
+      "s": "*",
+      "u": "gpadmin",
+      "j": "(for i in `seq 1 6`; do /etc/zabbix/scripts/greenplum.exporter.sh; sleep 10; done)" }

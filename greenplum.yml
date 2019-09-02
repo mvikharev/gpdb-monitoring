@@ -1,0 +1,9 @@
+---
+- name: prepare all greenplum hosts
+  hosts:
+  - gpdb-hosts
+  user: root
+  vars_files:
+  - vars/global.yml
+  roles:
+  - zabbix/agent
